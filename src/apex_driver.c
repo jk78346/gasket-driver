@@ -26,6 +26,7 @@
 #include "gasket_interrupt.h"
 #include "gasket_page_table.h"
 #include "gasket_sysfs.h"
+#include <linux/time.h>
 
 /* Constants */
 #define APEX_DEVICE_NAME "Apex"
@@ -313,6 +314,7 @@ module_param(temp_poll_interval, int, 0644);
 /* Check the device status registers and return device status ALIVE or DEAD. */
 static int apex_get_status(struct gasket_dev *gasket_dev)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	/* TODO: Check device status. */
 	return GASKET_STATUS_ALIVE;
 }
@@ -320,6 +322,7 @@ static int apex_get_status(struct gasket_dev *gasket_dev)
 /* Enter GCB reset state. */
 static int apex_enter_reset(struct gasket_dev *gasket_dev)
 {
+    printk(KERN_INFO "%s starts apex_enter_reset.\n", __func__);
 	if (bypass_top_level)
 		return 0;
 
@@ -329,15 +332,26 @@ static int apex_enter_reset(struct gasket_dev *gasket_dev)
 	 *  - Software force GCB idle
 	 *    - Enable GCB idle
 	 */
+    struct timespec ts1;
+    struct timespec ts2;
+    struct timespec ts3;
+    struct timespec ts4;
+    struct timespec ts5;
+    struct timespec ts6;
+    struct timespec ts7;
+    struct timespec ts8;
+    getnstimeofday(&ts1);
 	gasket_read_modify_write_64(gasket_dev, APEX_BAR_INDEX,
 				    APEX_BAR2_REG_IDLEGENERATOR_IDLEGEN_IDLEREGISTER,
 				    0x0, 1, 32);
 
 	/*    - Initiate DMA pause */
-	gasket_dev_write_64(gasket_dev, 1, APEX_BAR_INDEX,
+    getnstimeofday(&ts2);
+    gasket_dev_write_64(gasket_dev, 1, APEX_BAR_INDEX,
 			    APEX_BAR2_REG_USER_HIB_DMA_PAUSE);
 
 	/*    - Wait for DMA pause complete. */
+    getnstimeofday(&ts3);
 	if (gasket_wait_with_reschedule(gasket_dev, APEX_BAR_INDEX,
 					APEX_BAR2_REG_USER_HIB_DMA_PAUSED, 1, 1,
 					APEX_RESET_DELAY, APEX_RESET_RETRY)) {
@@ -346,18 +360,22 @@ static int apex_enter_reset(struct gasket_dev *gasket_dev)
 			APEX_RESET_RETRY * APEX_RESET_DELAY);
 		return -ETIMEDOUT;
 	}
+    getnstimeofday(&ts4);
 
 	/*  - Enable GCB reset (0x1 to rg_rst_gcb) */
 	gasket_read_modify_write_32(gasket_dev, APEX_BAR_INDEX,
 				    APEX_BAR2_REG_SCU_2, 0x1, 2, 2);
+    getnstimeofday(&ts5);
 
 	/*  - Enable GCB clock Gate (0x1 to rg_gated_gcb) */
 	gasket_read_modify_write_32(gasket_dev, APEX_BAR_INDEX,
 				    APEX_BAR2_REG_SCU_2, 0x1, 2, 18);
+    getnstimeofday(&ts6);
 
 	/*  - Enable GCB memory shut down (0x3 to rg_force_ram_sd) */
 	gasket_read_modify_write_32(gasket_dev, APEX_BAR_INDEX,
 				    APEX_BAR2_REG_SCU_3, 0x3, 2, 14);
+    getnstimeofday(&ts7);
 
 	/*    - Wait for RAM shutdown. */
 	if (gasket_wait_with_reschedule(gasket_dev, APEX_BAR_INDEX,
@@ -368,6 +386,21 @@ static int apex_enter_reset(struct gasket_dev *gasket_dev)
 			APEX_RESET_RETRY * APEX_RESET_DELAY);
 		return -ETIMEDOUT;
 	}
+    getnstimeofday(&ts8);
+    long ns1 = (ts2.tv_nsec - ts1.tv_nsec) + (ts2.tv_sec - ts1.tv_sec) * 1000000;  
+    long ns2 = (ts3.tv_nsec - ts2.tv_nsec) + (ts3.tv_sec - ts2.tv_sec) * 1000000;
+    long ns3 = (ts4.tv_nsec - ts3.tv_nsec) + (ts4.tv_sec - ts3.tv_sec) * 1000000;
+    long ns4 = (ts5.tv_nsec - ts4.tv_nsec) + (ts5.tv_sec - ts4.tv_sec) * 1000000;
+    long ns5 = (ts6.tv_nsec - ts5.tv_nsec) + (ts6.tv_sec - ts5.tv_sec) * 1000000;
+    long ns6 = (ts7.tv_nsec - ts6.tv_nsec) + (ts7.tv_sec - ts6.tv_sec) * 1000000;
+    long ns7 = (ts8.tv_nsec - ts7.tv_nsec) + (ts8.tv_sec - ts7.tv_sec) * 1000000;
+    printk(KERN_INFO "%s - ns1: %ld (ns)\n", __func__, ns1);
+    printk(KERN_INFO "%s - ns2: %ld (ns)\n", __func__, ns2);
+    printk(KERN_INFO "%s - ns3: %ld (ns)\n", __func__, ns3);
+    printk(KERN_INFO "%s - ns4: %ld (ns)\n", __func__, ns4);
+    printk(KERN_INFO "%s - ns5: %ld (ns)\n", __func__, ns5);
+    printk(KERN_INFO "%s - ns6: %ld (ns)\n", __func__, ns6);
+    printk(KERN_INFO "%s - ns7: %ld (ns)\n", __func__, ns7);
 
 	return 0;
 }
@@ -375,6 +408,7 @@ static int apex_enter_reset(struct gasket_dev *gasket_dev)
 /* Quit GCB reset state. */
 static int apex_quit_reset(struct gasket_dev *gasket_dev)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	u32 val0, val1;
 
 	if (bypass_top_level)
@@ -459,6 +493,7 @@ static int apex_quit_reset(struct gasket_dev *gasket_dev)
 /* Reset the Apex hardware. Called on final close via device_close_cb. */
 static int apex_device_cleanup(struct gasket_dev *gasket_dev)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	u64 scalar_error;
 	u64 hib_error;
 	int ret = 0;
@@ -481,6 +516,7 @@ static int apex_device_cleanup(struct gasket_dev *gasket_dev)
 /* Determine if GCB is in reset state. */
 static bool is_gcb_in_reset(struct gasket_dev *gasket_dev)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	u32 val = gasket_dev_read_32(gasket_dev, APEX_BAR_INDEX,
 				     APEX_BAR2_REG_SCU_3);
 
@@ -491,6 +527,7 @@ static bool is_gcb_in_reset(struct gasket_dev *gasket_dev)
 /* Reset the hardware, then quit reset.  Called on device open. */
 static int apex_reset(struct gasket_dev *gasket_dev)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	int ret;
 
 	if (bypass_top_level)
@@ -517,6 +554,7 @@ static int apex_reset(struct gasket_dev *gasket_dev)
  */
 static bool apex_ioctl_check_permissions(struct file *filp, uint cmd)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	return !!(filp->f_mode & FMODE_WRITE);
 }
 
@@ -524,6 +562,7 @@ static bool apex_ioctl_check_permissions(struct file *filp, uint cmd)
 static long apex_clock_gating(struct gasket_dev *gasket_dev,
 			      struct apex_gate_clock_ioctl __user *argp)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	struct apex_gate_clock_ioctl ibuf;
 
 	if (bypass_top_level || !allow_sw_clock_gating)
@@ -559,6 +598,7 @@ static long apex_set_performance_expectation(
 	struct gasket_dev *gasket_dev,
 	struct apex_performance_expectation_ioctl __user *argp)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	struct apex_performance_expectation_ioctl ibuf;
 	uint32_t rg_gcb_clk_div = 0;
 	uint32_t rg_axi_clk_fixed = 0;
@@ -613,14 +653,17 @@ static long apex_set_performance_expectation(
 /* Apex-specific ioctl handler. */
 static long apex_ioctl(struct file *filp, uint cmd, void __user *argp)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	struct gasket_dev *gasket_dev = filp->private_data;
 
 	if (!apex_ioctl_check_permissions(filp, cmd))
 		return -EPERM;
 
+    printk(KERN_INFO "%s : cmd: %d\n", __func__, cmd);
+
 	switch (cmd) {
 	case APEX_IOCTL_GATE_CLOCK:
-		return apex_clock_gating(gasket_dev, argp);
+        	return apex_clock_gating(gasket_dev, argp);
 	case APEX_IOCTL_PERFORMANCE_EXPECTATION:
 		return apex_set_performance_expectation(gasket_dev, argp);
 	default:
@@ -631,11 +674,13 @@ static long apex_ioctl(struct file *filp, uint cmd, void __user *argp)
 /* Linear fit optimized for 25C-100C */
 static int adc_to_millic(int adc)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	return (662 - adc) * 250 + 550;
 }
 
 static int millic_to_adc(int millic)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	return (550 - millic) / 250 + 662;
 }
 
@@ -643,6 +688,7 @@ static int millic_to_adc(int millic)
 static ssize_t sysfs_show(struct device *device, struct device_attribute *attr,
 			  char *buf)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	int ret;
 	unsigned value, value2, value3, value4;
 	struct gasket_dev *gasket_dev;
@@ -683,7 +729,8 @@ static ssize_t sysfs_show(struct device *device, struct device_attribute *attr,
 					gasket_dev->page_table[0]));
 		break;
 	case ATTR_KERNEL_HIB_NUM_ACTIVE_PAGES:
-		ret = scnprintf(buf, PAGE_SIZE, "%u\n",
+		printk(KERN_INFO "%s : num pages: %d\n", __func__, gasket_page_table_num_active_pages(gasket_dev->page_table[0]));
+        ret = scnprintf(buf, PAGE_SIZE, "%u\n",
 				gasket_page_table_num_active_pages(
 					gasket_dev->page_table[0]));
 		break;
@@ -754,6 +801,7 @@ static ssize_t sysfs_show(struct device *device, struct device_attribute *attr,
 static ssize_t sysfs_store(struct device *device, struct device_attribute *attr,
 			   const char *buf, size_t count)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	int ret = count, value;
 	struct gasket_dev *gasket_dev;
 	struct apex_dev *apex_dev;
@@ -883,6 +931,7 @@ static struct gasket_sysfs_attribute apex_sysfs_attrs[] = {
 
 /* Stores kernel module parameters to device specific data buffer */
 static void apply_module_params(struct apex_dev *apex_dev) {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	kernel_param_lock(THIS_MODULE);
 
 	/* use defaults if trip point temperatures are not in ascending order */
@@ -911,6 +960,7 @@ static void apply_module_params(struct apex_dev *apex_dev) {
 
 /* Applies hw temp warning settings to device */
 static void program_hw_temp_warnings(struct apex_dev *apex_dev) {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	gasket_read_modify_write_32(apex_dev->gasket_dev_ptr, APEX_BAR_INDEX,
 				    APEX_BAR2_REG_OMC0_D4,
 				    apex_dev->hw_temp_warn1_adc, 10, 16);
@@ -929,6 +979,7 @@ static void program_hw_temp_warnings(struct apex_dev *apex_dev) {
 }
 
 static void enable_thermal_sensing(struct gasket_dev *gasket_dev) {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	// Enable thermal sensor clocks
 	gasket_read_modify_write_32(gasket_dev, APEX_BAR_INDEX,
 				    APEX_BAR2_REG_OMC0_D0, 0x1, 1, 7);
@@ -945,6 +996,7 @@ static void enable_thermal_sensing(struct gasket_dev *gasket_dev) {
 }
 
 static void check_temperature_work_handler(struct work_struct *work) {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	int i, temp_poll_interval;
 	u32 adc_temp, clk_div, tmp;
 	const u32 mask = ((1 << 2) - 1) << 28;
@@ -992,6 +1044,7 @@ static void check_temperature_work_handler(struct work_struct *work) {
 /* On device open, perform a core reinit reset. */
 static int apex_device_open_cb(struct gasket_dev *gasket_dev)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	return gasket_reset_nolock(gasket_dev);
 }
 
@@ -1001,6 +1054,7 @@ static const struct pci_device_id apex_pci_ids[] = {
 
 static void apex_pci_fixup_class(struct pci_dev *pdev)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	pdev->class = (PCI_CLASS_SYSTEM_OTHER << 8) | pdev->class;
 }
 DECLARE_PCI_FIXUP_CLASS_HEADER(APEX_PCI_VENDOR_ID, APEX_PCI_DEVICE_ID,
@@ -1009,6 +1063,7 @@ DECLARE_PCI_FIXUP_CLASS_HEADER(APEX_PCI_VENDOR_ID, APEX_PCI_DEVICE_ID,
 static int apex_pci_probe(struct pci_dev *pci_dev,
 			  const struct pci_device_id *id)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	int ret, temp_poll_interval;
 	ulong page_table_ready, msix_table_ready;
 	int retries = 0;
@@ -1107,6 +1162,7 @@ remove_device:
 
 static void apex_pci_remove(struct pci_dev *pci_dev)
 {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	struct apex_dev *apex_dev = pci_get_drvdata(pci_dev);
 	struct gasket_dev *gasket_dev;
 
@@ -1126,6 +1182,7 @@ remove_device:
 }
 
 static int apex_pci_suspend(struct pci_dev *pci_dev, pm_message_t state) {
+    printk(KERN_INFO "%s starts.\n", __func__);
 	struct apex_dev *apex_dev = pci_get_drvdata(pci_dev);
 	struct gasket_dev *gasket_dev;
 
@@ -1142,7 +1199,8 @@ static int apex_pci_suspend(struct pci_dev *pci_dev, pm_message_t state) {
 
 static int apex_pci_resume(struct pci_dev *pci_dev)
 {
-	struct apex_dev *apex_dev = pci_get_drvdata(pci_dev);
+    printk(KERN_INFO "%s starts.\n", __func__);
+    struct apex_dev *apex_dev = pci_get_drvdata(pci_dev);
 	struct gasket_dev *gasket_dev;
 
 	if (!apex_dev) {
@@ -1219,7 +1277,7 @@ static struct pci_driver apex_pci_driver = {
 static int __init apex_init(void)
 {
 	int ret;
-
+    printk(KERN_INFO "===== %s starts. =====\n", __func__);
 	ret = gasket_register_device(&apex_desc);
 	if (ret)
 		return ret;
@@ -1231,6 +1289,7 @@ static int __init apex_init(void)
 
 static void apex_exit(void)
 {
+    printk(KERN_INFO "===== %s starts. =====\n", __func__);
 	pci_unregister_driver(&apex_pci_driver);
 	gasket_unregister_device(&apex_desc);
 }
